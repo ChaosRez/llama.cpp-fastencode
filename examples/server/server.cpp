@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <signal.h>
+#include <fstream>
 
 using json = nlohmann::json;
 
@@ -577,6 +578,26 @@ struct llama_server_context
         }
 
         return prompt_tokens;
+    }
+    // Function to dump tokens to a file in JSON format
+    static void dump_tokens_to_file(const std::string &filename, const json &prompt, const std::vector<llama_token> &tokens) {
+        try {
+            std::ofstream token_file(filename, std::ios::app);
+            if (!token_file.is_open()) {
+                LOG_ERROR("Failed to open token file for writing", {{"filename", filename}});
+                return;
+            }
+
+            // Write prompt and tokens as JSON
+            token_file << "=== New Generation ===\n";
+            token_file << "Prompt: " << prompt.dump() << "\n";
+            token_file << "Tokens: " << json(tokens).dump() << "\n"; // Pretty-print with 4 spaces indentation .dump(4)
+            token_file.close();
+
+            LOG_INFO("Tokens successfully saved to file", {{"filename", filename}});
+        } catch (const std::exception &e) {
+            LOG_ERROR("Exception occurred while dumping tokens to file", {{"error", e.what()}});
+        }
     }
 
     llama_client_slot* get_slot(int id) {
@@ -1748,6 +1769,9 @@ struct llama_server_context
                     else
                     {
                         prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
+                        // Store prompt and tokens in a file
+                        std::vector<llama_token> prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);
+                        dump_tokens_to_file("tokens.txt", slot.prompt, prompt_tokens);
                     }
 
                     slot.num_prompt_tokens = prompt_tokens.size();
