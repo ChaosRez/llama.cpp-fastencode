@@ -188,6 +188,9 @@ struct llama_client_slot
 
     std::string stopping_word;
 
+    std::vector<llama_token> context_tokens; // Added for context
+    bool has_context = false;                // Added for context flag
+
     // sampling
     struct llama_sampling_params sparams;
     llama_sampling_context *ctx_sampling = nullptr;
@@ -228,6 +231,8 @@ struct llama_client_slot
         infill                 = false;
         ga_i                   = 0;
         n_past_se              = 0;
+        context_tokens.clear(); // Added reset for context
+        has_context = false;    // Added reset for context flag
 
         generated_token_probs.clear();
 
@@ -885,6 +890,23 @@ struct llama_server_context
             }
         }
 
+        slot->context_tokens.clear();
+        slot->has_context = false;
+        const auto& context_it = data.find("context");
+        if (context_it != data.end() && context_it->is_array()) {
+            try {
+                slot->context_tokens = context_it->get<std::vector<llama_token>>();
+                slot->has_context = !slot->context_tokens.empty();
+                if (slot->has_context) {
+                    LOG_INFO("Received context tokens", {{"slot_id", slot->id}, {"task_id", slot->task_id}, {"n_context_tokens", slot->context_tokens.size()}});
+                }
+            } catch (const json::exception& e) {
+                LOG_ERROR("Failed to parse context tokens", {{"slot_id", slot->id}, {"task_id", slot->task_id}, {"error", e.what()}});
+                // Decide how to handle error: maybe return false or proceed without context
+                slot->has_context = false;
+            }
+        }
+
         if (slot->ctx_sampling != nullptr)
         {
             llama_sampling_free(slot->ctx_sampling);
@@ -1263,7 +1285,8 @@ struct llama_server_context
             {"stopped_limit",       slot.stopped_limit},
             {"stopping_word",       slot.stopping_word},
             {"tokens_cached",       slot.n_past},
-            {"timings",             slot.get_formated_timings()}
+            {"timings",             slot.get_formated_timings()},
+            {"processed_context",   slot.has_context} // Added context metadata
         };
 
         if (slot.sparams.n_probs > 0)
@@ -1722,6 +1745,9 @@ struct llama_server_context
         {
             for (auto & slot : slots)
             {
+                if (slot.command == LOAD_PROMPT) {
+
+                }
                 const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty()) || !slot.images.empty();
 
                 // empty prompt passed -> release the slot and send empty response
@@ -1768,10 +1794,44 @@ struct llama_server_context
                     }
                     else
                     {
-                        prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
-                        // Store prompt and tokens in a file
-                        std::vector<llama_token> prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);
-                        dump_tokens_to_file("tokens.txt", slot.prompt, prompt_tokens);
+                        if (slot.has_context) {
+                            // Prepend context tokens
+                            prompt_tokens = slot.context_tokens;
+
+                            // Prepend "user\n" to the prompt string before tokenizing
+                            std::string user_prompt_str;
+                            if (slot.prompt.is_string()) {
+                                user_prompt_str = "\n<|im_start|>user\n" + slot.prompt.get<std::string>() + "<|im_end|>";
+                            } else {
+                                // Handle cases where prompt might not be a simple string if necessary,
+                                // though typically it should be for this logic path.
+                                // For now, assume it's convertible or handle error/default.
+                                user_prompt_str = "\n<|im_start|>user\n" + slot.prompt.dump() + "<|im_end|>"; // Fallback to JSON dump if not string
+                            }
+                            json user_prompt_json = user_prompt_str; // Convert back to json for tokenize function
+
+                            // Tokenize the modified main prompt part without adding BOS initially
+                            std::vector<llama_token> main_prompt_tokens = tokenize(user_prompt_json, false); // Don't add BOS here
+
+                            // Append main prompt tokens
+                            prompt_tokens.insert(prompt_tokens.end(), main_prompt_tokens.begin(), main_prompt_tokens.end());
+
+                            // Handle BOS: Add if required and not already present at the start of context
+                            if (add_bos_token && (prompt_tokens.empty() || prompt_tokens[0] != llama_token_bos(model))) {
+                                prompt_tokens.insert(prompt_tokens.begin(), llama_token_bos(model));
+                            }
+                            // // ---- START DEBUG LOG ----
+                            // std::string combined_input_text = "";
+                            // for(llama_token t : prompt_tokens) {
+                            //     combined_input_text += llama_token_to_piece(ctx, t);
+                            // }
+                            // LOG_INFO("Combined input with context", {{"slot_id", slot.id}, {"task_id", slot.task_id}, {"text", combined_input_text}});
+                            // // ---- END DEBUG LOG ----
+                        } else {
+                            prompt_tokens = tokenize(slot.prompt, add_bos_token);
+                        }
+                        // FIXME: dump in a file
+                        // dump_tokens_to_file("tokens.txt", slot.prompt, prompt_tokens); // Log original prompt here
                     }
 
                     slot.num_prompt_tokens = prompt_tokens.size();
@@ -1781,6 +1841,17 @@ struct llama_server_context
                         slot.params.n_keep = slot.num_prompt_tokens;
                     }
                     slot.params.n_keep = std::min(slot.n_ctx - 4, slot.params.n_keep);
+                    // Check if the prompt tokens exceed the context size allocated for this slot.
+                    // Subtract 4 to leave some space for generation.
+                    if (slot.num_prompt_tokens > slot.n_ctx - 4) {
+                        task_server temp_task;
+                        temp_task.id = slot.task_id;
+                        temp_task.multitask_id = slot.multitask_id;
+                        send_error(temp_task, "prompt is too long (" + std::to_string(slot.num_prompt_tokens) + " tokens, max " + std::to_string(slot.n_ctx - 4) + ")");
+                        slot.command = NONE; // cancel loading
+                        slot.state = IDLE;
+                        continue;
+                    }
 
                     // if input prompt is too big, truncate it
                     if (slot.num_prompt_tokens >= slot.n_ctx)
