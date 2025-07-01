@@ -1765,7 +1765,8 @@ struct llama_server_context
                 {
                     slot.state = PROCESSING;
                     slot.command = NONE;
-                    std::vector<llama_token> prompt_tokens;
+                    std::vector<llama_token> prompt_tokens(slot.context_tokens.size());
+
                     slot.t_start_process_prompt = ggml_time_us();
                     slot.t_start_genereration = 0;
 
@@ -1794,40 +1795,26 @@ struct llama_server_context
                     }
                     else
                     {
-                        if (slot.has_context) {
+                        if (slot.has_context)
+                        {
                             // Prepend context tokens
                             prompt_tokens = slot.context_tokens;
 
                             // Prepend "user\n" to the prompt string before tokenizing
-                            std::string user_prompt_str;
-                            if (slot.prompt.is_string()) {
-                                user_prompt_str = "\n<|im_start|>user\n" + slot.prompt.get<std::string>() + "<|im_end|>";
-                            } else {
-                                // Handle cases where prompt might not be a simple string if necessary,
-                                // though typically it should be for this logic path.
-                                // For now, assume it's convertible or handle error/default.
-                                user_prompt_str = "\n<|im_start|>user\n" + slot.prompt.dump() + "<|im_end|>"; // Fallback to JSON dump if not string
-                            }
-                            json user_prompt_json = user_prompt_str; // Convert back to json for tokenize function
-
-                            // Tokenize the modified main prompt part without adding BOS initially
-                            std::vector<llama_token> main_prompt_tokens = tokenize(user_prompt_json, false); // Don't add BOS here
+                            std::string user_prompt_str = "\n<|im_start|>user\n" + slot.prompt.get<std::string>() + "<|im_end|>";
+                            const std::vector<llama_token> main_prompt_tokens = tokenize(static_cast<json>(user_prompt_str), false); 
 
                             // Append main prompt tokens
                             prompt_tokens.insert(prompt_tokens.end(), main_prompt_tokens.begin(), main_prompt_tokens.end());
 
                             // Handle BOS: Add if required and not already present at the start of context
-                            if (add_bos_token && (prompt_tokens.empty() || prompt_tokens[0] != llama_token_bos(model))) {
+                            if (add_bos_token && (prompt_tokens.empty() || prompt_tokens[0] != llama_token_bos(model)))
+                            {
                                 prompt_tokens.insert(prompt_tokens.begin(), llama_token_bos(model));
                             }
-                            // // ---- START DEBUG LOG ----
-                            // std::string combined_input_text = "";
-                            // for(llama_token t : prompt_tokens) {
-                            //     combined_input_text += llama_token_to_piece(ctx, t);
-                            // }
-                            // LOG_INFO("Combined input with context", {{"slot_id", slot.id}, {"task_id", slot.task_id}, {"text", combined_input_text}});
-                            // // ---- END DEBUG LOG ----
-                        } else {
+                        } 
+                        else 
+                        {
                             prompt_tokens = tokenize(slot.prompt, add_bos_token);
                         }
                         // FIXME: dump in a file
