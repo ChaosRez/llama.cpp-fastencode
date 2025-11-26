@@ -8,6 +8,10 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+> **Note:** This fork has been tweaked with some edits to be used for the [DisCEdge](https://github.com/ChaosRez/llm-context-management) project, which is a distributed context management system designed to enable efficient, low-latency Large Language Model (LLM) inference in edge computing environments.
+>
+> Please cite our paper if you are using this: "DisCEdge: Distributed Context Management for Large Language Models at the Edge"
+
 ### Hot topics
 
 - Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
@@ -923,7 +927,7 @@ Subsequently, if you decide to incorporate CLBlast, you'll first need to install
 apt install ocl-icd opencl-headers opencl-clhpp clinfo
 ```
 
-In order to compile CLBlast, you'll need to first clone the respective Git repository, which can be found at this URL: https://github.com/CNugteren/CLBlast. Alongside this, clone this repository into your home directory. Once this is done, navigate to the CLBlast folder and execute the commands detailed below:
+In order to compile CLBlast, you'll need to first clone the Git repository, which can be found at this URL: https://github.com/CNugteren/CLBlast. Alongside this, clone this repository into your home directory. Once this is done, navigate to the CLBlast folder and execute the commands detailed below:
 ```
 cmake .
 make
