@@ -9,7 +9,7 @@
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
 ---
-> **Note:** This fork has been tweaked with some edits to be used for the [DisCEdge](https://github.com/ChaosRez/llm-context-management) project, which is a distributed context management system designed to enable efficient, low-latency Large Language Model (LLM) inference in edge computing environments.
+> **Note:** This fork has been modified for the [DisCEdge](https://github.com/ChaosRez/llm-context-management) project, a system for distributed context management in edge environments. The key change allows passing a `context` token array along with the `prompt` to provide session context to the model in pre-tokenized (instead of raw text).
 
 ## Research
 
