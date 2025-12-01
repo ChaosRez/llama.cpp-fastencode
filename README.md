@@ -8,10 +8,28 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+---
 > **Note:** This fork has been tweaked with some edits to be used for the [DisCEdge](https://github.com/ChaosRez/llm-context-management) project, which is a distributed context management system designed to enable efficient, low-latency Large Language Model (LLM) inference in edge computing environments.
->
-> Please cite our paper if you are using this: "DisCEdge: Distributed Context Management for Large Language Models at the Edge"
 
+## Research
+
+If you use this software in a publication, please cite it as:
+
+### Text
+
+M. Malekabbasi, M. Wang, and D. Bermbach, **DisCEdge: Distributed Context Management for Large Language Models at the Edge**, 2025. ([arXiv](https://arxiv.org/abs/2511.22599))
+
+### BibTeX
+
+```bibtex
+@article{malekabbasi2025discedge,
+  title={DisCEdge: Distributed Context Management for Large Language Models at the Edge},
+  author={Malekabbasi, Mohammadreza and Wang, Minghe and Bermbach, David},
+  year={2025},
+  url={https://arxiv.org/abs/2511.22599}
+}
+```
+---
 ### Hot topics
 
 - Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
